@@ -439,6 +439,20 @@ ItemUsage ItemUsageValue::QueryItemUsageForAmmo(ItemTemplate const* proto)
     return ITEM_USAGE_NONE;
 }
 
+// Inverse of GetItemIdFromQualifier below: encode one item instance's identity
+// (item id plus any random property) into the qualifier string.
+std::string ItemUsageQualifier(Item const* item)
+{
+    if (!item)
+        return "";
+
+    std::string qualifier = std::to_string(item->GetTemplate()->ItemId);
+    if (int32 const randomPropertyId = item->GetItemRandomPropertyId())
+        qualifier += "," + std::to_string(randomPropertyId);
+
+    return qualifier;
+}
+
 ParsedItemUsage ItemUsageValue::GetItemIdFromQualifier()
 {
     ParsedItemUsage parsed;

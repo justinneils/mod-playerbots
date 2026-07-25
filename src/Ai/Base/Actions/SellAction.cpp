@@ -50,7 +50,7 @@ public:
 
     bool Visit(Item* item) override
     {
-        ItemUsage usage = context->GetValue<ItemUsage>("item usage", item->GetEntry())->Get();
+        ItemUsage usage = context->GetValue<ItemUsage>("item usage", ItemUsageQualifier(item))->Get();
         if (usage != ITEM_USAGE_VENDOR && usage != ITEM_USAGE_AH)
             return true;
 

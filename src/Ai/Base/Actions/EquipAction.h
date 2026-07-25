@@ -7,6 +7,8 @@
 #ifndef PLAYERBOTS_EQUIPACTION_H
 #define PLAYERBOTS_EQUIPACTION_H
 
+#include <vector>
+
 #include "ChatHelper.h"
 #include "InventoryAction.h"
 #include "Item.h"
@@ -22,7 +24,11 @@ public:
 
     bool Execute(Event event) override;
     void EquipItems(ItemIds ids);
-    ItemIds SelectInventoryItemsToEquip();
+    // Equips the exact item instances selected as upgrades. Takes guids rather
+    // than item ids so an item's random suffix is not lost between the upgrade
+    // decision and the equip (two rolls of one item share an item id).
+    void EquipItemsByGuid(std::vector<ObjectGuid> const& guids);
+    std::vector<ObjectGuid> SelectInventoryItemsToEquip();
 
 private:
     void EquipItem(FindItemVisitor* visitor);

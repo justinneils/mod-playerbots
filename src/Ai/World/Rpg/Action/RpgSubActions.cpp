@@ -12,6 +12,7 @@
 #include "Formations.h"
 #include "GossipDef.h"
 #include "GuildCreateActions.h"
+#include "ItemUsageValue.h"
 #include "LastMovementValue.h"
 #include "MovementActions.h"
 #include "PlayerbotTextMgr.h"
@@ -393,7 +394,7 @@ std::vector<Item*> RpgTradeUsefulAction::CanGiveItems(GuidPosition guidPosition)
             if (bot->GetTradeData() && bot->GetTradeData()->HasItem(item->GetGUID()))
                 continue;
 
-            ItemUsage otherUsage = PAI_VALUE2(ItemUsage, "item usage", item->GetEntry());
+            ItemUsage otherUsage = PAI_VALUE2(ItemUsage, "item usage", ItemUsageQualifier(item));
 
             if (std::find(myUsages.begin(), myUsages.end(), otherUsage) == myUsages.end())
                 giveItems.push_back(item);

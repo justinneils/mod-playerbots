@@ -38,6 +38,13 @@ enum ItemUsage : uint32
     ITEM_USAGE_AMMO = 13
 };
 
+// Build the "item usage" qualifier for one specific item instance, as either
+// "<itemId>" or "<itemId>,<randomPropertyId>". Always prefer this over passing a
+// bare item id when an Item* is in hand: the bare form makes the usage verdict
+// suffix-blind, and since the value is cached per qualifier string, every random
+// suffix roll of an item would otherwise share one cached verdict.
+std::string ItemUsageQualifier(Item const* item);
+
 class ItemUsageValue : public CalculatedValue<ItemUsage>, public Qualified
 {
 public:

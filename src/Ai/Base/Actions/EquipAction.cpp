@@ -32,6 +32,17 @@ void EquipAction::EquipItems(ItemIds ids)
     }
 }
 
+void EquipAction::EquipItemsByGuid(std::vector<ObjectGuid> const& guids)
+{
+    for (ObjectGuid const& guid : guids)
+    {
+        // Resolve at use time: equipping an item swaps inventory around, so a
+        // pointer cached before the loop could be stale by the time we reach it.
+        if (Item* item = bot->GetItemByGuid(guid))
+            EquipItem(item);
+    }
+}
+
 // Return bagslot with smalest bag.
 uint8 EquipAction::GetSmallestBagSlot()
 {
@@ -331,12 +342,12 @@ void EquipAction::EquipItem(Item* item)
     botAI->TellMaster(out);
 }
 
-ItemIds EquipAction::SelectInventoryItemsToEquip()
+std::vector<ObjectGuid> EquipAction::SelectInventoryItemsToEquip()
 {
     CollectItemsVisitor visitor;
     IterateItems(&visitor, ITERATE_ITEMS_IN_BAGS);
 
-    ItemIds items;
+    std::vector<ObjectGuid> items;
     for (auto i = visitor.items.begin(); i != visitor.items.end(); ++i)
     {
         Item* item = *i;
@@ -352,17 +363,15 @@ ItemIds EquipAction::SelectInventoryItemsToEquip()
         if (itemTemplate->InventoryType == INVTYPE_NON_EQUIP)
             continue;
 
-        int32 randomProperty = item->GetItemRandomPropertyId();
-        uint32 itemId = item->GetTemplate()->ItemId;
-        std::string itemUsageParam;
-        if (randomProperty != 0)
-            itemUsageParam = std::to_string(itemId) + "," + std::to_string(randomProperty);
-        else
-            itemUsageParam = std::to_string(itemId);
-
-        ItemUsage usage = AI_VALUE2(ItemUsage, "item upgrade", itemUsageParam);
+        ItemUsage usage = AI_VALUE2(ItemUsage, "item upgrade", ItemUsageQualifier(item));
         if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE || usage == ITEM_USAGE_BAD_EQUIP)
-            items.insert(itemId);
+        {
+            // Keep the guid of the exact instance that was scored. Storing the
+            // item id instead would collapse different random-suffix rolls of the
+            // same item into one entry and re-resolve to whichever copy happened
+            // to be found first, so the wrong roll could get equipped.
+            items.push_back(item->GetGUID());
+        }
     }
     return items;
 }
@@ -404,14 +413,14 @@ bool EquipUpgradesPacketAction::Execute(Event event)
             return false;
     }
 
-    ItemIds items = SelectInventoryItemsToEquip();
-    EquipItems(items);
+    std::vector<ObjectGuid> items = SelectInventoryItemsToEquip();
+    EquipItemsByGuid(items);
     return true;
 }
 
 bool EquipUpgradeAction::Execute(Event /*event*/)
 {
-    ItemIds items = SelectInventoryItemsToEquip();
-    EquipItems(items);
+    std::vector<ObjectGuid> items = SelectInventoryItemsToEquip();
+    EquipItemsByGuid(items);
     return true;
 }
