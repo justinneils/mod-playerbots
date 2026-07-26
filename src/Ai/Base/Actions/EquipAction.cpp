@@ -15,6 +15,34 @@
 #include "StatsWeightCalculator.h"
 #include "ItemPackets.h"
 
+namespace
+{
+    // Dispatch an auto-equip into a specific slot and report whether the item
+    // actually landed there.
+    //
+    // HandleAutoEquipItemSlotOpcode validates through Player::CanEquipItem,
+    // which a module may veto -- mod-partybots, for example, refuses to let a
+    // bot replace an equipped heirloom with a normal item. A vetoed equip fails
+    // silently, so announcing unconditionally told the master about an equip
+    // that never happened. Callers must check this before telling the master.
+    bool TryEquipIntoSlot(Player* bot, Item* item, uint8 dstSlot)
+    {
+        if (!bot || !item || !bot->GetSession())
+            return false;
+
+        ObjectGuid const itemGuid = item->GetGUID();
+
+        WorldPacket packet(CMSG_AUTOEQUIP_ITEM_SLOT, 2);
+        packet << itemGuid << dstSlot;
+        WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(packet));
+        nicePacket.Read();
+        bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
+
+        Item* equipped = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, dstSlot);
+        return equipped && equipped->GetGUID() == itemGuid;
+    }
+}
+
 bool EquipAction::Execute(Event event)
 {
     std::string const text = event.getParam();
@@ -115,13 +143,8 @@ void EquipAction::EquipItem(Item* item)
         // Handle them early here to avoid issues.
         if (invType == INVTYPE_RANGED || invType == INVTYPE_THROWN || invType == INVTYPE_RANGEDRIGHT)
         {
-            WorldPacket packet(CMSG_AUTOEQUIP_ITEM_SLOT, 2);
-            ObjectGuid itemguid = item->GetGUID();
-            packet << itemguid << uint8(EQUIPMENT_SLOT_RANGED);
-
-            WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(packet));
-            nicePacket.Read();
-            bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
+            if (!TryEquipIntoSlot(bot, item, uint8(EQUIPMENT_SLOT_RANGED)))
+                return;
 
             std::ostringstream out;
             out << "Equipping " << chat->FormatItem(itemProto) << " in ranged slot";
@@ -213,31 +236,23 @@ void EquipAction::EquipItem(Item* item)
 
             if (canGoMain && betterThanMH && mhConditionOK)
             {
-                // Equip new weapon in main hand
-                {
-                    WorldPacket eqPacket(CMSG_AUTOEQUIP_ITEM_SLOT, 2);
-                    ObjectGuid newItemGuid = item->GetGUID();
-                    eqPacket << newItemGuid << uint8(EQUIPMENT_SLOT_MAINHAND);
-                    WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(eqPacket));
-                    nicePacket.Read();
-                    bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
-                }
+                // Equip new weapon in main hand. Bail out silently if the equip
+                // was refused, rather than reporting a swap that did not happen
+                // (and without displacing the existing main hand).
+                if (!TryEquipIntoSlot(bot, item, uint8(EQUIPMENT_SLOT_MAINHAND)))
+                    return;
 
                 // Try moving old main hand weapon to offhand if beneficial
                 if (mainHandItem && mainHandCanGoOff && (!offHandItem || mainHandScore > offHandScore))
                 {
                     const ItemTemplate* oldMHProto = mainHandItem->GetTemplate();
 
-                    WorldPacket offhandPacket(CMSG_AUTOEQUIP_ITEM_SLOT, 2);
-                    ObjectGuid oldMHGuid = mainHandItem->GetGUID();
-                    offhandPacket << oldMHGuid << uint8(EQUIPMENT_SLOT_OFFHAND);
-                    WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(offhandPacket));
-                    nicePacket.Read();
-                    bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
-
-                    std::ostringstream moveMsg;
-                    moveMsg << "Main hand upgrade found. Moving " << chat->FormatItem(oldMHProto) << " to offhand";
-                    botAI->TellMaster(moveMsg);
+                    if (TryEquipIntoSlot(bot, mainHandItem, uint8(EQUIPMENT_SLOT_OFFHAND)))
+                    {
+                        std::ostringstream moveMsg;
+                        moveMsg << "Main hand upgrade found. Moving " << chat->FormatItem(oldMHProto) << " to offhand";
+                        botAI->TellMaster(moveMsg);
+                    }
                 }
 
                 std::ostringstream out;
@@ -250,12 +265,8 @@ void EquipAction::EquipItem(Item* item)
             else if (canGoOff && newItemScore > offHandScore)
             {
                 // Equip in offhand
-                WorldPacket eqPacket(CMSG_AUTOEQUIP_ITEM_SLOT, 2);
-                ObjectGuid newItemGuid = item->GetGUID();
-                eqPacket << newItemGuid << uint8(EQUIPMENT_SLOT_OFFHAND);
-                WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(eqPacket));
-                nicePacket.Read();
-                bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
+                if (!TryEquipIntoSlot(bot, item, uint8(EQUIPMENT_SLOT_OFFHAND)))
+                    return;
 
                 std::ostringstream out;
                 out << "Equipping " << chat->FormatItem(itemProto) << " in offhand";
@@ -327,14 +338,8 @@ void EquipAction::EquipItem(Item* item)
         }
 
         // Equip the item in the chosen slot
-        {
-            WorldPacket packet(CMSG_AUTOEQUIP_ITEM_SLOT, 2);
-            ObjectGuid itemguid = item->GetGUID();
-            packet << itemguid << dstSlot;
-            WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(packet));
-            nicePacket.Read();
-            bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
-        }
+        if (!TryEquipIntoSlot(bot, item, dstSlot))
+            return;
     }
 
     std::ostringstream out;
