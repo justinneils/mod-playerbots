@@ -65,7 +65,10 @@ public:
     StatsCollector(CollectorType type, int32 cls = -1);
     StatsCollector(StatsCollector& stats) = default;
     void Reset();
-    void CollectItemStats(ItemTemplate const* proto);
+    // playerLevel is only needed for items whose stats live in
+    // ScalingStatDistribution/ScalingStatValue rather than in the template
+    // (heirlooms). Pass 0 to score the raw template as before.
+    void CollectItemStats(ItemTemplate const* proto, uint32 playerLevel = 0);
     void CollectSpellStats(uint32 spellId, float multiplier = 1.0f, Milliseconds spellCooldown = -1ms);
     void CollectEnchantStats(SpellItemEnchantmentEntry const* enchant, uint32 default_enchant_amount = 0);
     bool CanBeTriggeredByType(SpellInfo const* spellInfo, uint32 procFlags, bool strict = true);

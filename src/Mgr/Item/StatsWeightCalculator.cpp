@@ -98,7 +98,9 @@ float StatsWeightCalculator::CalculateItem(uint32 itemId, int32 randomPropertyId
 
     Reset();
 
-    collector_->CollectItemStats(proto);
+    // Pass the level so scaling items (heirlooms) are collected with their real
+    // level-scaled stats instead of their empty template values.
+    collector_->CollectItemStats(proto, lvl);
 
     if (randomPropertyIds != 0)
         CalculateRandomProperty(randomPropertyIds, itemId);
@@ -121,9 +123,14 @@ float StatsWeightCalculator::CalculateItem(uint32 itemId, int32 randomPropertyId
 
     if (enable_quality_blend_)
     {
-        // Heirloom items scale with player level
-        // Use player level as effective item level for heirlooms - Quality EPIC
-        // Else - Blend with item quality and level for normal items
+        // Heirlooms have ItemLevel 1 in their template, so blending on that would
+        // crush the score. Treat the wearer's level as the effective item level,
+        // at epic quality, which is what an heirloom is worth for its level.
+        //
+        // Note this multiplier alone is NOT what makes heirlooms score correctly:
+        // it scales a weight that CollectItemStats must first populate from
+        // ScalingStatDistribution. Before that was done, this multiplied ~0 and
+        // heirlooms always lost to level-appropriate gear.
         if (proto->Quality == ITEM_QUALITY_HEIRLOOM)
             weight_ *= PlayerbotFactory::CalcMixedGearScore(lvl, ITEM_QUALITY_EPIC);
         else

@@ -20,25 +20,88 @@ void StatsCollector::Reset()
     }
 }
 
-void StatsCollector::CollectItemStats(ItemTemplate const* proto)
+void StatsCollector::CollectItemStats(ItemTemplate const* proto, uint32 playerLevel /*= 0*/)
 {
+    // Heirlooms carry no usable numbers in their template: ItemLevel 1, damage
+    // 1-0, every ItemStat zero. Their real values come from
+    // ScalingStatDistribution / ScalingStatValue, resolved against the wearer's
+    // level. Scoring the template alone therefore values an heirloom at ~0, so
+    // any level-appropriate item outranks it and a bot will try forever to
+    // replace a perfectly good heirloom.
+    //
+    // Resolve the scaling exactly as Player::_ApplyItemBonuses does, so the
+    // score matches the stats the character actually receives in game.
+    ScalingStatDistributionEntry const* ssd = nullptr;
+    ScalingStatValuesEntry const* ssv = nullptr;
+    if (playerLevel && proto->ScalingStatDistribution && proto->ScalingStatValue)
+    {
+        ssd = sScalingStatDistributionStore.LookupEntry(proto->ScalingStatDistribution);
+        uint32 ssdLevel = playerLevel;
+        if (ssd && ssdLevel > ssd->MaxLevel)
+            ssdLevel = ssd->MaxLevel;
+
+        ssv = sScalingStatValuesStore.LookupEntry(ssdLevel);
+    }
+
+    float dmgMin = proto->Damage[0].DamageMin;
+    float dmgMax = proto->Damage[0].DamageMax;
+    if (ssv)
+    {
+        if (int32 extraDPS = ssv->getDPSMod(proto->ScalingStatValue))
+        {
+            float const average = extraDPS * proto->Delay / 1000.0f;
+            float const mod = ssv->IsTwoHand(proto->ScalingStatValue) ? 0.2f : 0.3f;
+            dmgMin = (1.0f - mod) * average;
+            dmgMax = (1.0f + mod) * average;
+        }
+    }
+
     if (proto->IsRangedWeapon())
     {
-        float val = (proto->Damage[0].DamageMin + proto->Damage[0].DamageMax) * 1000 / 2 / proto->Delay;
+        float val = (dmgMin + dmgMax) * 1000 / 2 / proto->Delay;
         stats[STATS_TYPE_RANGED_DPS] += val;
     }
     else if (proto->IsWeapon())
     {
-        float val = (proto->Damage[0].DamageMin + proto->Damage[0].DamageMax) * 1000 / 2 / proto->Delay;
+        float val = (dmgMin + dmgMax) * 1000 / 2 / proto->Delay;
         stats[STATS_TYPE_MELEE_DPS] += val;
     }
-    stats[STATS_TYPE_ARMOR] += proto->Armor;
-    stats[STATS_TYPE_BLOCK_VALUE] += proto->Block;
-    for (uint32 i = 0; i < proto->StatsCount; i++)
+
+    uint32 armor = proto->Armor;
+    if (ssv)
     {
-        const _ItemStat& stat = proto->ItemStat[i];
-        const int32& val = stat.ItemStatValue;
-        CollectByItemStatType(stat.ItemStatType, val);
+        if (uint32 ssvArmor = ssv->getArmorMod(proto->ScalingStatValue))
+            armor = ssvArmor;
+    }
+    stats[STATS_TYPE_ARMOR] += armor;
+    stats[STATS_TYPE_BLOCK_VALUE] += proto->Block;
+
+    if (ssd && ssv)
+    {
+        // Stats come from the distribution, not from ItemStat[].
+        for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+        {
+            if (ssd->StatMod[i] < 0)
+                continue;
+
+            int32 const val =
+                int32((ssv->getssdMultiplier(proto->ScalingStatValue) * ssd->Modifier[i]) / 10000);
+            if (val)
+                CollectByItemStatType(uint32(ssd->StatMod[i]), val);
+        }
+
+        // Spell power is a separate ScalingStatValue field, not a StatMod entry.
+        if (int32 spellBonus = ssv->getSpellBonus(proto->ScalingStatValue))
+            CollectByItemStatType(ITEM_MOD_SPELL_POWER, spellBonus);
+    }
+    else
+    {
+        for (uint32 i = 0; i < proto->StatsCount; i++)
+        {
+            const _ItemStat& stat = proto->ItemStat[i];
+            const int32& val = stat.ItemStatValue;
+            CollectByItemStatType(stat.ItemStatType, val);
+        }
     }
     for (uint8 j = 0; j < MAX_ITEM_PROTO_SPELLS; j++)
     {
