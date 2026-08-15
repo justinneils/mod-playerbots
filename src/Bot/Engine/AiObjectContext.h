@@ -80,6 +80,18 @@ public:
     static void BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts);
     static void BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts);
 
+    // Extension points for external modules: register additional shared contexts
+    // after BuildAllSharedContexts() has run. Add takes ownership of the context.
+    static void AddSharedStrategyContext(NamedObjectContext<Strategy>* ctx) { sharedStrategyContexts.Add(ctx); }
+    static void AddSharedActionContext(NamedObjectContext<Action>* ctx) { sharedActionContexts.Add(ctx); }
+    static void AddSharedTriggerContext(NamedObjectContext<Trigger>* ctx) { sharedTriggerContexts.Add(ctx); }
+    static void AddSharedValueContext(NamedObjectContext<UntypedValue>* ctx) { sharedValueContexts.Add(ctx); }
+
+    // Symmetric with GetSupportedStrategies()/GetSupportedActions(), which exist;
+    // needed to validate a value name before lookup, since GetUntypedValue()
+    // permanently inserts an entry for every distinct name it is handed.
+    std::set<std::string> GetSupportedValues() { return valueContexts.supports(); }
+
 protected:
     NamedObjectContextList<Strategy> strategyContexts;
     NamedObjectContextList<Action> actionContexts;
