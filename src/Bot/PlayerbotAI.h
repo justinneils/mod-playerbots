@@ -611,6 +611,11 @@ public:
     // Schedules a callback to run once after <delayMs> milliseconds.
     void AddTimedEvent(std::function<void()> callback, uint32 delayMs);
 
+    // Extension points for external modules (mod-altbotinspector): read-only access
+    // to the engines so a module can install an ActionExecutionListener.
+    Engine* GetEngine(BotState state) { return state < BOT_STATE_MAX ? engines[state] : nullptr; }
+    Engine* GetCurrentEngine() { return currentEngine; }
+
 private:
     static void _fillGearScoreData(Player* player, Item* item, std::vector<uint32>* gearScore, uint32& twoHandScore,
                                    bool mixed = false);
