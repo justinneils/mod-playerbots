@@ -81,11 +81,19 @@ public:
     static void BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts);
 
     // Extension points for external modules: register additional shared contexts
-    // after BuildAllSharedContexts() has run. Add takes ownership of the context.
-    static void AddSharedStrategyContext(NamedObjectContext<Strategy>* ctx) { sharedStrategyContexts.Add(ctx); }
-    static void AddSharedActionContext(NamedObjectContext<Action>* ctx) { sharedActionContexts.Add(ctx); }
-    static void AddSharedTriggerContext(NamedObjectContext<Trigger>* ctx) { sharedTriggerContexts.Add(ctx); }
-    static void AddSharedValueContext(NamedObjectContext<UntypedValue>* ctx) { sharedValueContexts.Add(ctx); }
+    // after BuildAllSharedContexts() has run.
+    //
+    // These take a FACTORY rather than a context, and the reason is not style.
+    // Every class context owns its own shared lists and binds to them in its
+    // constructor (see AiFactory::createAiObjectContext, which hands every bot a
+    // class-specific context), so AiObjectContext's own statics are populated
+    // but never read by a real bot. A registration therefore has to reach all
+    // eleven lists — and since Add() takes ownership, one context object cannot
+    // be handed to more than one of them. The factory is invoked once per list.
+    static void AddSharedStrategyContext(std::function<NamedObjectContext<Strategy>*()> make);
+    static void AddSharedActionContext(std::function<NamedObjectContext<Action>*()> make);
+    static void AddSharedTriggerContext(std::function<NamedObjectContext<Trigger>*()> make);
+    static void AddSharedValueContext(std::function<NamedObjectContext<UntypedValue>*()> make);
 
     // Symmetric with GetSupportedStrategies()/GetSupportedActions(), which exist;
     // needed to validate a value name before lookup, since GetUntypedValue()

@@ -49,6 +49,51 @@ void AiObjectContext::BuildAllSharedContexts()
     DKAiObjectContext::BuildSharedContexts();
 }
 
+// The same enumeration BuildAllSharedContexts() performs just above, for the
+// same reason: each class context has its own shared lists and a registration
+// that reached only AiObjectContext's would be invisible to every real bot.
+// If a class is ever added, it belongs in both lists.
+#define PLAYERBOTS_FOR_EACH_SHARED_CONTEXT(ACTION) \
+    ACTION(AiObjectContext)                        \
+    ACTION(PriestAiObjectContext)                  \
+    ACTION(MageAiObjectContext)                    \
+    ACTION(WarlockAiObjectContext)                 \
+    ACTION(WarriorAiObjectContext)                 \
+    ACTION(ShamanAiObjectContext)                  \
+    ACTION(PaladinAiObjectContext)                 \
+    ACTION(DruidAiObjectContext)                   \
+    ACTION(HunterAiObjectContext)                  \
+    ACTION(RogueAiObjectContext)                   \
+    ACTION(DKAiObjectContext)
+
+void AiObjectContext::AddSharedStrategyContext(std::function<NamedObjectContext<Strategy>*()> make)
+{
+#define PLAYERBOTS_ADD_STRATEGY(CLASS) CLASS::sharedStrategyContexts.Add(make());
+    PLAYERBOTS_FOR_EACH_SHARED_CONTEXT(PLAYERBOTS_ADD_STRATEGY)
+#undef PLAYERBOTS_ADD_STRATEGY
+}
+
+void AiObjectContext::AddSharedActionContext(std::function<NamedObjectContext<Action>*()> make)
+{
+#define PLAYERBOTS_ADD_ACTION(CLASS) CLASS::sharedActionContexts.Add(make());
+    PLAYERBOTS_FOR_EACH_SHARED_CONTEXT(PLAYERBOTS_ADD_ACTION)
+#undef PLAYERBOTS_ADD_ACTION
+}
+
+void AiObjectContext::AddSharedTriggerContext(std::function<NamedObjectContext<Trigger>*()> make)
+{
+#define PLAYERBOTS_ADD_TRIGGER(CLASS) CLASS::sharedTriggerContexts.Add(make());
+    PLAYERBOTS_FOR_EACH_SHARED_CONTEXT(PLAYERBOTS_ADD_TRIGGER)
+#undef PLAYERBOTS_ADD_TRIGGER
+}
+
+void AiObjectContext::AddSharedValueContext(std::function<NamedObjectContext<UntypedValue>*()> make)
+{
+#define PLAYERBOTS_ADD_VALUE(CLASS) CLASS::sharedValueContexts.Add(make());
+    PLAYERBOTS_FOR_EACH_SHARED_CONTEXT(PLAYERBOTS_ADD_VALUE)
+#undef PLAYERBOTS_ADD_VALUE
+}
+
 void AiObjectContext::BuildSharedContexts()
 {
     BuildSharedStrategyContexts(sharedStrategyContexts);
