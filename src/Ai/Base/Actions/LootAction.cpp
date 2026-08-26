@@ -401,7 +401,12 @@ bool StoreLootAction::Execute(Event event)
         if (!proto)
             continue;
 
-        if (!IsRealPlayer(botAI->GetMaster()) && AI_VALUE(uint8, "bag space") > 80)
+        // FORK-PATCH(loot-bag-space): upstream also requires !IsRealPlayer(botAI->GetMaster()) here,
+        // which leaves a party led by a real player with no bag-space protection at all. The bot then
+        // queues CMSG_AUTOSTORE_LOOT_ITEM with no room, the server rejects it, the loot stays in the
+        // object, and the bot re-loots it forever instead of doing anything else -- a gathering node
+        // never empties, so it never despawns. Keep the master check dropped when merging upstream.
+        if (AI_VALUE(uint8, "bag space") > 80)
         {
             uint32 maxStack = proto->GetMaxStackSize();
             if (maxStack == 1)
