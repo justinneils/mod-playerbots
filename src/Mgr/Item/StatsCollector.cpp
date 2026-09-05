@@ -103,8 +103,8 @@ void StatsCollector::CollectItemStats(ItemTemplate const* proto, uint32 playerLe
     {
         for (uint32 i = 0; i < proto->StatsCount; i++)
         {
-            const _ItemStat& stat = proto->ItemStat[i];
-            const int32& val = stat.ItemStatValue;
+            _ItemStat const& stat = proto->ItemStat[i];
+            int32 const& val = stat.ItemStatValue;
             CollectByItemStatType(stat.ItemStatType, val);
         }
     }
@@ -134,7 +134,7 @@ void StatsCollector::CollectItemStats(ItemTemplate const* proto, uint32 playerLe
 
     if (proto->socketBonus)
     {
-        if (const SpellItemEnchantmentEntry* enchant = sSpellItemEnchantmentStore.LookupEntry(proto->socketBonus))
+        if (SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.LookupEntry(proto->socketBonus))
             CollectEnchantStats(enchant);
     }
 }
@@ -149,7 +149,7 @@ void StatsCollector::CollectSpellStats(uint32 spellId, float multiplier, Millise
     if (SpecialSpellFilter(spellId))
         return;
 
-    const SpellProcEntry* eventEntry = sSpellMgr->GetSpellProcEntry(spellInfo->Id);
+    SpellProcEntry const* eventEntry = sSpellMgr->GetSpellProcEntry(spellInfo->Id);
 
     Milliseconds triggerCooldown = eventEntry ? eventEntry->Cooldown : 0ms;
 
@@ -188,7 +188,7 @@ void StatsCollector::CollectSpellStats(uint32 spellId, float multiplier, Millise
 
     for (int i = 0; i < MAX_SPELL_EFFECTS; i++)
     {
-        const SpellEffectInfo& effectInfo = spellInfo->Effects[i];
+        SpellEffectInfo const& effectInfo = spellInfo->Effects[i];
         if (!effectInfo.Effect)
             continue;
         switch (effectInfo.Effect)
@@ -420,7 +420,7 @@ bool StatsCollector::SpecialEnchantFilter(uint32 enchantSpellId)
 
 bool StatsCollector::CanBeTriggeredByType(SpellInfo const* spellInfo, uint32 procFlags, bool strict)
 {
-    const SpellProcEntry* eventEntry = sSpellMgr->GetSpellProcEntry(spellInfo->Id);
+    SpellProcEntry const* eventEntry = sSpellMgr->GetSpellProcEntry(spellInfo->Id);
     uint32 spellFamilyName = 0;
     if (eventEntry)
     {
@@ -615,7 +615,7 @@ void StatsCollector::CollectByItemStatType(uint32 itemStatType, int32 val)
     }
 }
 
-void StatsCollector::HandleApplyAura(const SpellEffectInfo& effectInfo, float multiplier, bool canNextTrigger,
+void StatsCollector::HandleApplyAura(SpellEffectInfo const& effectInfo, float multiplier, bool canNextTrigger,
                                      Milliseconds triggerCooldown)
 {
     if (effectInfo.Effect != SPELL_EFFECT_APPLY_AURA)
@@ -764,6 +764,7 @@ void StatsCollector::HandleApplyAura(const SpellEffectInfo& effectInfo, float mu
                     }
                 }
             }
+            break;
         }
         case SPELL_AURA_MOD_POWER_REGEN:
         {
@@ -772,6 +773,7 @@ void StatsCollector::HandleApplyAura(const SpellEffectInfo& effectInfo, float mu
             {
                 case POWER_MANA:
                     stats[STATS_TYPE_MANA_REGENERATION] += val * multiplier;
+                    break;
                 default:
                     break;
             }
@@ -810,7 +812,7 @@ void StatsCollector::HandleApplyAura(const SpellEffectInfo& effectInfo, float mu
     }
 }
 
-float StatsCollector::AverageValue(const SpellEffectInfo& effectInfo)
+float StatsCollector::AverageValue(SpellEffectInfo const& effectInfo)
 {
     // float basePointsPerLevel = effectInfo.RealPointsPerLevel; //not used, line marked for removal.
     float basePoints = effectInfo.BasePoints;
