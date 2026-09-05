@@ -401,31 +401,41 @@ bool StoreLootAction::Execute(Event event)
         if (!proto)
             continue;
 
-        // FORK-PATCH(loot-bag-space): upstream also requires !IsRealPlayer(botAI->GetMaster()) here,
-        // which leaves a party led by a real player with no bag-space protection at all. The bot then
-        // queues CMSG_AUTOSTORE_LOOT_ITEM with no room, the server rejects it, the loot stays in the
-        // object, and the bot re-loots it forever instead of doing anything else -- a gathering node
-        // never empties, so it never despawns. Keep the master check dropped when merging upstream.
+        // FORK-PATCH(loot-bag-space): two changes from upstream, which reads
+        //
+        //     if (!IsRealPlayer(botAI->GetMaster()) && AI_VALUE(uint8, "bag space") > 80)
+        //     {
+        //         uint32 maxStack = proto->GetMaxStackSize();
+        //         if (maxStack == 1) continue;
+        //         std::vector<Item*> found = parseItems(chat->FormatItem(proto));
+        //         bool hasFreeStack = false;
+        //         for (auto stack : found)
+        //             if (stack->GetCount() + itemcount < maxStack) { hasFreeStack = true; break; }
+        //         if (!hasFreeStack) continue;
+        //     }
+        //
+        // 1. The !IsRealPlayer(botAI->GetMaster()) half disabled the guard entirely for any bot whose
+        //    master is a real player -- every party bot -- so it queued CMSG_AUTOSTORE_LOOT_ITEM with
+        //    no room and the server rejected the store.
+        //
+        // 2. The heuristic it guarded only ever asked "can this merge into a partial stack I already
+        //    hold". It never looked at FREE SLOTS, so a bot with empty slots refused loot it could
+        //    trivially store, and `< maxStack` rejected even an exact fit. Observed on a tin vein:
+        //    Coarse Stone x10 against stacks of 20 and 15 (max 20) and Shadowgem x5 against none held,
+        //    both refused, while four slots sat empty in the bot's second bag.
+        //
+        // Either way nothing was stored, so the object kept its loot, never emptied and never
+        // despawned -- and because IsLootPossible has no notion of bag space, `add gathering loot`
+        // re-added it every cycle and the bot re-mined the same node forever, doing nothing else.
+        // See also FORK-PATCH(gathering-no-room) in AddLootAction.cpp, which is the other half.
+        //
+        // CanStoreNewItem is the authoritative answer: it is the same question the server will ask
+        // when the packet arrives, and it accounts for free slots, partial stacks, bag families and
+        // unique limits at once. A pass here means the store actually consumes the object's loot.
         if (AI_VALUE(uint8, "bag space") > 80)
         {
-            uint32 maxStack = proto->GetMaxStackSize();
-            if (maxStack == 1)
-                continue;
-
-            std::vector<Item*> found = parseItems(chat->FormatItem(proto));
-
-            bool hasFreeStack = false;
-
-            for (auto stack : found)
-            {
-                if (stack->GetCount() + itemcount < maxStack)
-                {
-                    hasFreeStack = true;
-                    break;
-                }
-            }
-
-            if (!hasFreeStack)
+            ItemPosCountVec dest;
+            if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemid, itemcount) != EQUIP_ERR_OK)
                 continue;
         }
 
