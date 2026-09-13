@@ -659,6 +659,11 @@ protected:
     Position jumpDestination = Position();
     uint32 nextTransportCheck = 0;
     bool spellInterruptRequested = false;
+    // FORK-PATCH(selfbot-free-flight): true while this selfbot's action engine is
+    // held off because the player it belongs to has free flight (see
+    // UpdateAIInternal). Only used to make entering and leaving that state
+    // one-shot.
+    bool flightSuspended = false;
 };
 
 #endif

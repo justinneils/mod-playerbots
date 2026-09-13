@@ -552,6 +552,45 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
     masterIncomingPacketHandlers.Handle(helper);
     masterOutgoingPacketHandlers.Handle(helper);
 
+    // FORK-PATCH(selfbot-free-flight): a selfbot does nothing at all while the
+    // player it is running on has been granted free flight -- mod-player-fly's
+    // .fly toggle, or a flying mount. Up there the player is steering by hand and
+    // most actions are futile or actively harmful: a hunter's "call pet" is
+    // queued at 60 relevance, is refused mid-flight, and is then retried on every
+    // tick, which both spams the client and starves every other action. Only the
+    // action engine is skipped -- the housekeeping above (chat replies, commands,
+    // packet handlers, logout) still runs, so the character keeps responding and
+    // picks its own behaviour back up the moment flight ends.
+    if (IsSelfBot(bot) && (bot->CanFly() || bot->IsFlying()))
+    {
+        if (!flightSuspended)
+        {
+            flightSuspended = true;
+
+            // Drop whatever was already in progress, so a cast or a server-side
+            // move started on the ground does not follow the player into the air.
+            // No StopMoving() here: the client is steering this character itself,
+            // and a stop packet would only fight it. Clearing the motion master
+            // is enough -- it is where a bot-initiated move lives.
+            bot->InterruptNonMeleeSpells(false);
+            bot->AttackStop();
+            bot->GetMotionMaster()->Clear();
+        }
+
+        SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+
+        if (pmo)
+            pmo->finish();
+
+        return;
+    }
+
+    if (flightSuspended)
+    {
+        flightSuspended = false;
+        Reset();  // back on the ground: re-plan from a clean slate
+    }
+
     DoNextAction(minimal);
 
     if (pmo)

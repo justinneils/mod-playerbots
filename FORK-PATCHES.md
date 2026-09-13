@@ -119,6 +119,60 @@ bot looting a quest item off a corpse.
 
 ---
 
+## `selfbot-free-flight`
+
+**Files:** `src/Bot/PlayerbotAI.cpp`, in `PlayerbotAI::UpdateAIInternal` (just before
+`DoNextAction`); `src/Bot/PlayerbotAI.h` (the `flightSuspended` member).
+
+**Added:**
+
+```cpp
+if (IsSelfBot(bot) && (bot->CanFly() || bot->IsFlying()))
+{
+    if (!flightSuspended)
+    {
+        flightSuspended = true;
+        bot->InterruptNonMeleeSpells(false);
+        bot->AttackStop();
+        bot->GetMotionMaster()->Clear();
+    }
+
+    SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+    if (pmo)
+        pmo->finish();
+    return;
+}
+
+if (flightSuspended)
+{
+    flightSuspended = false;
+    Reset();
+}
+```
+
+**Why:** this server runs `mod-player-fly`, whose `.fly` command grants a normal player free flight
+(server-side `SetCanFly`, not a mount) for as long as they leave it toggled on. A character flying
+under its own steering must not also be driven by a selfbot. The case that forced it: a hunter's
+`no pet` trigger queues `call pet` at 60 relevance, the cast is refused while airborne
+(`PlayerbotAI::CastSpell` bails on `bot->IsFlying()`), and the trigger re-fires on the next tick
+forever — starving every other action and spamming the owner's own client.
+
+Scoped to `IsSelfBot` deliberately. Ordinary bots get `MOVEMENTFLAG_CAN_FLY` from playerbots itself
+in `MovementActions` so they can follow a flying master, and gating them on `CanFly()` would ground
+that. A selfbot's flags, by contrast, come from a real client, which reports them truthfully and
+clears them when flight ends — so the suspension cannot latch.
+
+Only the action engine is skipped: the chat replies, `HandleCommands`, the packet handlers and the
+logout path above it all still run, so the character keeps answering commands while its owner flies,
+and `Reset()` on the way back down makes it re-plan instead of resuming a stale target.
+
+`bot->CanFly()` covers a flying mount too, which is the same situation and wants the same answer.
+`StopMoving()` is deliberately *not* called: the client owns this character's movement, and a stop
+packet would only fight it. Clearing the motion master is enough — that is where a bot-initiated
+move lives.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline
