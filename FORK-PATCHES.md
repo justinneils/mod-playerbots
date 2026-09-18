@@ -173,6 +173,76 @@ move lives.
 
 ---
 
+## `hunter-arcane-shot`
+
+**File:** `src/Ai/Class/Hunter/HunterActions.cpp`, in `CastArcaneShotAction::isUseful`
+
+Two independent upstream bugs in the same six lines. Together they make Arcane Shot
+**unreachable for every hunter on this realm** — the action is in all three hunter strategies
+at 5.3 relevance, and `Engine::ExecuteAction` drops it as `ACTION_RESULT_USELESS` on every tick.
+
+### 1. The Explosive Shot test is inverted
+
+**Upstream:**
+
+```cpp
+if (!target || !botAI->HasSpell("explosive shot"))
+    return false;
+```
+
+**Here:**
+
+```cpp
+if (!target)
+    return false;
+
+if (botAI->HasSpell("explosive shot"))
+    return false;
+```
+
+**Why:** upstream `a76f2ca2` ("Refactor HasSpell/HasAura and convert spellIds to constants",
+#2435) rewrote the original
+
+```cpp
+if (bot->HasSpell(53301) || bot->HasSpell(60051) ||
+    bot->HasSpell(60052) || bot->HasSpell(60053))  // Explosive Shot spell IDs
+    return false;
+```
+
+and dropped the negation on the way. The intent was and is *"Explosive Shot replaces Arcane Shot
+as the filler, so skip Arcane Shot once you have it"* — a 51-point Survival talent at level 60+.
+After the refactor Arcane Shot requires Explosive Shot, so a Beast Mastery or Marksmanship hunter
+at any level, and **every** hunter below 60, never casts it.
+
+### 2. The armor-penetration read is a health read
+
+**Upstream:**
+
+```cpp
+bot->GetUInt32Value(PLAYER_FIELD_COMBAT_RATING_1) + bot->GetUInt32Value(CR_ARMOR_PENETRATION)
+```
+
+**Here:**
+
+```cpp
+bot->GetUInt32Value(PLAYER_FIELD_COMBAT_RATING_1 + CR_ARMOR_PENETRATION)
+```
+
+**Why:** `CR_ARMOR_PENETRATION` is a *rating index* (24, `Unit.h`), not a field index. It is meant
+to be added to `PLAYER_FIELD_COMBAT_RATING_1` to pick the 25th entry of that array; upstream adds
+the two **field reads** instead. Field 24 is `UNIT_FIELD_HEALTH` (`OBJECT_END + 0x12`), so the
+second term is the bot's current health — and `armorPenRating > 435` is then true for anything past
+roughly level 8. This one survives bug 1: fixing only the Explosive Shot test leaves Arcane Shot
+still refused, which is why both changes are in this patch.
+
+**Verifying:** any hunter without Explosive Shot, in combat with a target. Before, `arcane shot`
+never appears in the action stream at all (`.abi` decision log, or `20_log_changes.lua`); after, it
+lands in the rotation between `auto shot` and `raptor strike`. `env/dist/etc/abi-scripts/32_hunter.lua`
+also asks for it by name every tick via `ai.do_action`, and that call goes through the same
+`isUseful` gate, so a passing script and a silent rotation was the symptom that found this.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline

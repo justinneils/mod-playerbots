@@ -25,12 +25,22 @@ bool CastAspectOfTheHawkAction::isUseful()
 bool CastArcaneShotAction::isUseful()
 {
     Unit* target = GetTarget();
-    if (!target || !botAI->HasSpell("explosive shot"))
+    if (!target)
         return false;
 
+    // FORK-PATCH(hunter-arcane-shot): upstream reads
+    //     if (!target || !botAI->HasSpell("explosive shot"))
+    // which inverts the test it replaced. Explosive Shot is the *replacement* filler, so
+    // holding it is the reason to skip Arcane Shot, not the requirement for it.
+    if (botAI->HasSpell("explosive shot"))
+        return false;
+
+    // FORK-PATCH(hunter-arcane-shot): upstream reads
+    //     bot->GetUInt32Value(PLAYER_FIELD_COMBAT_RATING_1) + bot->GetUInt32Value(CR_ARMOR_PENETRATION)
+    // which adds two field reads instead of indexing one. CR_ARMOR_PENETRATION is 24, and field 24
+    // is UNIT_FIELD_HEALTH, so the second term is the bot's current health.
     // Armor Penetration rating check - will not cast Arcane Shot above 435 ArP
-    int32 armorPenRating =
-        bot->GetUInt32Value(PLAYER_FIELD_COMBAT_RATING_1) + bot->GetUInt32Value(CR_ARMOR_PENETRATION);
+    int32 armorPenRating = bot->GetUInt32Value(PLAYER_FIELD_COMBAT_RATING_1 + CR_ARMOR_PENETRATION);
     if (armorPenRating > 435)
         return false;
 
