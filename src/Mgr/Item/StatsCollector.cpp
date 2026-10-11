@@ -15,7 +15,10 @@
 #include "SpellMgr.h"
 #include "Util.h"
 
-StatsCollector::StatsCollector(CollectorType type, int32 cls) : type_(type), cls_(cls) { Reset(); }
+StatsCollector::StatsCollector(CollectorType type, int32 cls, int32 lvl) : type_(type), cls_(cls), lvl_(lvl)
+{
+    Reset();
+}
 
 void StatsCollector::Reset()
 {
@@ -25,92 +28,40 @@ void StatsCollector::Reset()
     }
 }
 
-void StatsCollector::CollectItemStats(ItemTemplate const* proto, uint32 playerLevel /*= 0*/)
+void StatsCollector::CollectItemStats(ItemTemplate const* proto)
 {
-    // Heirlooms carry no usable numbers in their template: ItemLevel 1, damage
-    // 1-0, every ItemStat zero. Their real values come from
-    // ScalingStatDistribution / ScalingStatValue, resolved against the wearer's
-    // level. Scoring the template alone therefore values an heirloom at ~0, so
-    // any level-appropriate item outranks it and a bot will try forever to
-    // replace a perfectly good heirloom.
-    //
-    // Resolve the scaling exactly as Player::_ApplyItemBonuses does, so the
-    // score matches the stats the character actually receives in game.
-    ScalingStatDistributionEntry const* ssd = nullptr;
-    ScalingStatValuesEntry const* ssv = nullptr;
-    if (playerLevel && proto->ScalingStatDistribution && proto->ScalingStatValue)
-    {
-        ssd = sScalingStatDistributionStore.LookupEntry(proto->ScalingStatDistribution);
-        uint32 ssdLevel = playerLevel;
-        if (ssd && ssdLevel > ssd->MaxLevel)
-            ssdLevel = ssd->MaxLevel;
+    // Heirlooms and other scaling items hold their real stats in DBC, keyed by wearer level (Player::_ApplyItemBonuses)
+    ScalingStatDistributionEntry const* ssd =
+        proto->ScalingStatDistribution ? sScalingStatDistributionStore.LookupEntry(proto->ScalingStatDistribution)
+                                       : nullptr;
 
-        ssv = sScalingStatValuesStore.LookupEntry(ssdLevel);
-    }
+    uint32 ssdLevel = lvl_ > 0 ? uint32(lvl_) : 0;
+    if (ssd && ssdLevel > ssd->MaxLevel)
+        ssdLevel = ssd->MaxLevel;
 
-    float dmgMin = proto->Damage[0].DamageMin;
-    float dmgMax = proto->Damage[0].DamageMax;
+    // Without a wearer level (lvl_ -1) a scaling item keeps its template values.
+    ScalingStatValuesEntry const* ssv =
+        proto->ScalingStatValue && ssdLevel ? sScalingStatValuesStore.LookupEntry(ssdLevel) : nullptr;
+
+    CollectWeaponDamageStats(proto, ssv);
+    CollectItemStatValues(proto, ssd, ssv);
+
     if (ssv)
     {
-        if (int32 extraDPS = ssv->getDPSMod(proto->ScalingStatValue))
-        {
-            float const average = extraDPS * proto->Delay / 1000.0f;
-            float const mod = ssv->IsTwoHand(proto->ScalingStatValue) ? 0.2f : 0.3f;
-            dmgMin = (1.0f - mod) * average;
-            dmgMax = (1.0f + mod) * average;
-        }
-    }
-
-    if (proto->IsRangedWeapon())
-    {
-        float val = (dmgMin + dmgMax) * 1000 / 2 / proto->Delay;
-        stats[STATS_TYPE_RANGED_DPS] += val;
-    }
-    else if (proto->IsWeapon())
-    {
-        float val = (dmgMin + dmgMax) * 1000 / 2 / proto->Delay;
-        stats[STATS_TYPE_MELEE_DPS] += val;
-        // Feral forms convert weapon DPS into attack power, so treat it as attack power for Feral Druids.
-        if (cls_ == CLASS_DRUID && (type_ & CollectorType::MELEE))
-            stats[STATS_TYPE_ATTACK_POWER] += proto->getFeralBonus();
+        if (uint32 spellBonus = ssv->getSpellBonus(proto->ScalingStatValue))
+            CollectByItemStatType(ITEM_MOD_SPELL_POWER, spellBonus);
     }
 
     uint32 armor = proto->Armor;
     if (ssv)
     {
+        // An ssv entry exists only for scaling items, so the scaled armor always replaces the template value.
         if (uint32 ssvArmor = ssv->getArmorMod(proto->ScalingStatValue))
             armor = ssvArmor;
     }
+
     stats[STATS_TYPE_ARMOR] += armor;
     stats[STATS_TYPE_BLOCK_VALUE] += proto->Block;
-
-    if (ssd && ssv)
-    {
-        // Stats come from the distribution, not from ItemStat[].
-        for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
-        {
-            if (ssd->StatMod[i] < 0)
-                continue;
-
-            int32 const val =
-                int32((ssv->getssdMultiplier(proto->ScalingStatValue) * ssd->Modifier[i]) / 10000);
-            if (val)
-                CollectByItemStatType(uint32(ssd->StatMod[i]), val);
-        }
-
-        // Spell power is a separate ScalingStatValue field, not a StatMod entry.
-        if (int32 spellBonus = ssv->getSpellBonus(proto->ScalingStatValue))
-            CollectByItemStatType(ITEM_MOD_SPELL_POWER, spellBonus);
-    }
-    else
-    {
-        for (uint32 i = 0; i < proto->StatsCount; i++)
-        {
-            _ItemStat const& stat = proto->ItemStat[i];
-            int32 const& val = stat.ItemStatValue;
-            CollectByItemStatType(stat.ItemStatType, val);
-        }
-    }
     for (uint8 j = 0; j < MAX_ITEM_PROTO_SPELLS; j++)
     {
         switch (proto->Spells[j].SpellTrigger)
@@ -139,6 +90,71 @@ void StatsCollector::CollectItemStats(ItemTemplate const* proto, uint32 playerLe
     {
         if (SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.LookupEntry(proto->socketBonus))
             CollectEnchantStats(enchant);
+    }
+}
+
+void StatsCollector::CollectWeaponDamageStats(ItemTemplate const* proto, ScalingStatValuesEntry const* ssv)
+{
+    if (!proto->IsWeapon() || proto->Delay == 0)
+        return;
+
+    int32 extraDps = ssv ? ssv->getDPSMod(proto->ScalingStatValue) : 0;
+    float dps = 0.0f;
+
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
+    {
+        float minDamage = proto->Damage[i].DamageMin;
+        float maxDamage = proto->Damage[i].DamageMax;
+
+        // Scaling replaces the first damage entry: min 70% / max 130% of the scaled average, 80% / 120% two-hand.
+        if (extraDps && i == 0)
+        {
+            float average = extraDps * proto->Delay / 1000.0f;
+            float mod = ssv->IsTwoHand(proto->ScalingStatValue) ? 0.2f : 0.3f;
+
+            minDamage = (1.0f - mod) * average;
+            maxDamage = (1.0f + mod) * average;
+        }
+
+        dps += (minDamage + maxDamage) * 1000 / 2 / proto->Delay;
+    }
+
+    if (proto->IsRangedWeapon())
+    {
+        stats[STATS_TYPE_RANGED_DPS] += dps;
+        return;
+    }
+
+    stats[STATS_TYPE_MELEE_DPS] += dps;
+    // Feral forms convert weapon DPS into attack power, so treat it as attack power for Feral Druids.
+    if (cls_ == CLASS_DRUID && (type_ & CollectorType::MELEE))
+        stats[STATS_TYPE_ATTACK_POWER] += proto->getFeralBonus(extraDps);
+}
+
+void StatsCollector::CollectItemStatValues(ItemTemplate const* proto, ScalingStatDistributionEntry const* ssd,
+                                           ScalingStatValuesEntry const* ssv)
+{
+    if (ssv)
+    {
+        // A scaling item draws its stats from the distribution entry alone; its template stats are ignored, as in core.
+        if (!ssd)
+            return;
+
+        uint32 multiplier = ssv->getssdMultiplier(proto->ScalingStatValue);
+        for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+        {
+            if (ssd->StatMod[i] < 0)
+                continue;
+
+            CollectByItemStatType(ssd->StatMod[i], int32(multiplier * ssd->Modifier[i] / 10000));
+        }
+        return;
+    }
+
+    for (uint32 i = 0; i < proto->StatsCount; ++i)
+    {
+        _ItemStat const& stat = proto->ItemStat[i];
+        CollectByItemStatType(stat.ItemStatType, stat.ItemStatValue);
     }
 }
 

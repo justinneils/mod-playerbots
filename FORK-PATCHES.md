@@ -249,6 +249,14 @@ Six local commits predate this file and are not documented above (`git log --one
 upstream/master..HEAD --no-merges`). They carry no `FORK-PATCH` markers. Worth backfilling if any
 of them ever survives a merge silently broken.
 
+**Retired 2026-10-11:** `9b3b060b` (score heirlooms by their scaled stats) is superseded by
+upstream #2821 (`1e72d5f8`, "Have Heirloom Items scale with level"), which reads the same
+ScalingStatDistribution / ScalingStatValue data for stats, weapon damage, armour and spell power.
+The only difference was plumbing -- ours added a level parameter to `CollectItemStats`, upstream's
+passes it to the `StatsCollector` constructor -- so the merge took upstream's `StatsCollector.cpp`,
+`StatsCollector.h` and `StatsWeightCalculator.cpp` whole. No caller used our signature. Five
+uncatalogued commits remain.
+
 ---
 
 ## Verifying the loot patches
