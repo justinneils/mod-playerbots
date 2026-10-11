@@ -645,7 +645,7 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
             bot->GetMotionMaster()->Clear();
         }
 
-        SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+        SetNextCheckDelay(sPlayerbotAIConfig.ReactDelay);
 
         if (pmo)
             pmo->finish();
