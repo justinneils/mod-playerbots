@@ -73,6 +73,13 @@ bool CleanQuestLogAction::Execute(Event event)
     if (!sPlayerbotAIConfig.DropObsoleteQuests)
         return false;
 
+    // FORK-PATCH(clean-quest-log-random-only): the automatic triggers ("random" in nc,
+    // "seldom" in maintenance) carry no owner. Only let them prune random bots; selfbots
+    // and account alts are real characters whose low-level quests are kept on purpose.
+    // An explicit "clean quest log" whisper has an owner and still runs.
+    if (!event.getOwner() && !sRandomPlayerbotMgr.IsRandomBot(bot))
+        return false;
+
     // Only output this message if "debug rpg" strategy is enabled
     if (botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
         botAI->TellMaster(PlayerbotTextMgr::instance().GetBotTextOrDefault(

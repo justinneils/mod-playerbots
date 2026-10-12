@@ -279,6 +279,32 @@ Exempting these bots from the 80% gate is safe here because `loot-bag-space` and
 
 ---
 
+## `clean-quest-log-random-only`
+
+**File:** `src/Ai/Base/Actions/DropQuestAction.cpp`, in `CleanQuestLogAction::Execute`
+
+**Upstream:** after the `DropObsoleteQuests` check, every bot that runs the action drops each quest
+more than 5/6/7/8 levels (by bot level band) below its own level, silently unless `debug rpg` is on.
+
+**Here:** added straight after the `DropObsoleteQuests` check:
+
+```cpp
+if (!event.getOwner() && !sRandomPlayerbotMgr.IsRandomBot(bot))
+    return false;
+```
+
+**Why:** the action is fired automatically by `"random"` in the `nc` strategy (and `"seldom"` in
+`maintenance`), which every bot runs, selfbots included. Observed 2026-10-11: Montreale (level 36,
+played as a selfbot) had 18 quests silently abandoned. All of them were level 28 or lower, which
+matches the 30-39 threshold of 7 exactly, so you could not keep a low-level quest. The account alts
+grouped with it had the same exposure. `DropObsoleteQuests` stays on because the 500 random bots
+need it. Triggered events carry no owner, while a whispered `clean quest log` command does, so the
+explicit command still works on alts.
+
+**If upstream scopes this to random bots itself,** drop this patch.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline
