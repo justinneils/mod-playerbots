@@ -243,6 +243,42 @@ also asks for it by name every tick via `ai.do_action`, and that call goes throu
 
 ---
 
+## `gathering-selfbot-master`
+
+**File:** `src/Mgr/Item/LootObjectStack.cpp`, in `LootObject::IsLootPossible` (the
+`canUseRequirement` lambda)
+
+**Upstream** (#2638 `ddf54880`, reshaped by #2807 `81c0516b`):
+
+```cpp
+Player* master = botAI->GetMaster();
+bool const hasActivePlayerMaster = master && !GET_PLAYERBOT_AI(master);
+if (gatheringObject && !hasActivePlayerMaster)
+    // refuse herb/ore/skin nodes above 80% bag space
+```
+
+**Here:**
+
+```cpp
+bool const hasActivePlayerMaster = botAI->HasGameClientMaster();
+```
+
+**Why:** upstream's gate exempts bots whose master is a real player, but "real player" there means
+"has no PlayerbotAI". A selfbot master (`.playerbots bot self`) has one, so its party bots got the
+80% gate anyway. Observed 2026-10-11: Thoronto (Mining 187, Mining Pick, 1 yd from a Gold Vein at
+82% bags, master Montreale as selfbot) logged `add gathering loot - FAILED` 836 times in a row and
+never mined. `HasGameClientMaster()` is upstream's own `IsRealPlayer || IsSelfBot` helper.
+
+Exempting these bots from the 80% gate is safe here because `loot-bag-space` and
+`gathering-no-room` already cover what the gate was for, the infinite re-gather loop.
+
+**Diagnosed with** a throwaway abi-script logging `ai.value(guid, "bag space")` on
+`add gathering loot` plus `bot.master.name == bot.name` for the master.
+
+**If upstream switches this to `HasGameClientMaster()` or `IsSelfBot` itself,** drop this patch.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline

@@ -327,8 +327,17 @@ bool LootObject::IsLootPossible(Player* bot)
 
         bool const gatheringObject = requirement.SkillId == SKILL_HERBALISM || requirement.SkillId == SKILL_MINING ||
                                      requirement.SkillId == SKILL_SKINNING || requirement.SkillId == SKILL_ENGINEERING;
-        Player* master = botAI->GetMaster();
-        bool const hasActivePlayerMaster = master && !GET_PLAYERBOT_AI(master);
+        // FORK-PATCH(gathering-selfbot-master): upstream reads
+        //
+        //     Player* master = botAI->GetMaster();
+        //     bool const hasActivePlayerMaster = master && !GET_PLAYERBOT_AI(master);
+        //
+        // which counts a selfbot master (`.playerbots bot self`, a human who handed their character to
+        // the AI) as "no player", because a selfbot carries a PlayerbotAI. Its party bots then get the
+        // 80% gather gate that real-player parties are exempt from, and a party bot at 82% bags stands
+        // next to a node it has the skill and pick for and never mines it. HasGameClientMaster is
+        // upstream's own "real player or selfbot" test.
+        bool const hasActivePlayerMaster = botAI->HasGameClientMaster();
         if (gatheringObject && !hasActivePlayerMaster)
         {
             constexpr uint8 maxGatheringBagUsage = 80;
