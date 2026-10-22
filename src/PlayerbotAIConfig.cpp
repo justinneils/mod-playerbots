@@ -707,6 +707,7 @@ bool PlayerbotAIConfig::Initialize()
 
     // SPP automation
     FreeMethodLoot = sConfigMgr->GetOption<bool>("Playerbots.FreeMethodLoot", false);
+    AutoLootChests = sConfigMgr->GetOption<bool>("Playerbots.AutoLootChests", false);  // FORK-PATCH(no-auto-chest-loot)
     LootNeedRollLevel = sConfigMgr->GetOption<int32>("Playerbots.LootNeedRollLevel", 1);
     LootRollRecipe = sConfigMgr->GetOption<bool>("Playerbots.LootRollRecipe", false);
     LootRollDisenchant = sConfigMgr->GetOption<bool>("Playerbots.LootRollDisenchant", false);

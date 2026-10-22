@@ -330,6 +330,12 @@ Playerbots.LootRollRecipe = 0
 # Default: 0 (disabled)
 Playerbots.LootRollDisenchant = 0
 
+# Bots automatically loot chests: treasure and locked chests, quest crates and sacks, found nearby
+# or opened by their master. Herb and ore nodes are unaffected; "u <object>" still opens a chest.
+# FORK-PATCH(no-auto-chest-loot)
+# Default: 0 (disabled)
+Playerbots.AutoLootChests = 0
+
 # A list of GameObject GUIDs that bots will not interact with.
 # List of default GUIDs:
 # QuestItems:

@@ -305,6 +305,46 @@ explicit command still works on alts.
 
 ---
 
+## `no-auto-chest-loot`
+
+**Files:** `src/Ai/Base/Actions/AddLootAction.cpp` (`IsChestLootBlocked`, called from
+`AddLootAction::Execute` and `AddAllLootAction::AddLoot`); `src/PlayerbotAIConfig.h` / `.cpp`
+(`AutoLootChests`); `conf/playerbots.conf.dist` (`Playerbots.AutoLootChests = 0`).
+
+**Upstream:** any `GAMEOBJECT_TYPE_CHEST` object a bot can open goes on its `available loot` stack.
+Only the per-entry `Playerbots.DisallowedGameObjects` list keeps one out.
+
+**Here:** while `Playerbots.AutoLootChests` is 0 (the default), both add paths refuse a chest-type
+object unless its lock has a Herbalism or Mining skill case:
+
+```cpp
+SkillType const skill = SkillByLockType(LockType(lockInfo->Index[i]));
+if (skill == SKILL_HERBALISM || skill == SKILL_MINING)
+    return false;
+```
+
+**Why:** Justin wanted no automatic chest looting at all (2026-10-18). A per-entry list cannot do
+that: the world has hundreds of chest entries. The two gated functions cover every automatic way a
+game object reaches the stack:
+
+- `add all loot`, from the `often` trigger in the `loot` strategy (the nearby sweep);
+- `add gathering loot`, from the `gather` timer, which routes through `AddAllLootAction::AddLoot`
+  and would otherwise send a rogue to pick every locked chest it walks past;
+- `add loot`, fired by `use game object` when the master opens an object (the bot copies the click).
+
+What this blocks: treasure chests, locked chests, dungeon chests, and quest crates and sacks. Quest
+pickups are the same object type. With `SyncQuestWithPlayer = 1`, a bot already leaves a quest item
+for its master, so it gains nothing by running to one. Herb and ore nodes are chest-type too, which is
+why the lock is checked. Fishing pools are `GAMEOBJECT_TYPE_FISHINGHOLE` and unaffected.
+
+`u <object link>` (`UseItemAction`) does not use these paths, so an explicit order still opens a
+chest. The whispered `add all loot` command does use them, so it now skips chests too.
+
+**If this ever needs to go:** set `Playerbots.AutoLootChests = 1`. That restores upstream behaviour
+without a rebuild.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline

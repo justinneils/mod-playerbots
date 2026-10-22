@@ -372,6 +372,7 @@ public:
     uint32 BotActiveAloneSmartScaleWhenMaxLevel;
 
     bool FreeMethodLoot;
+    bool AutoLootChests;  // FORK-PATCH(no-auto-chest-loot)
     int32 LootNeedRollLevel;
     bool LootGreedRollLevel;
     bool LootRollRecipe;

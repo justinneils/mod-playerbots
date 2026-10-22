@@ -7,6 +7,7 @@
 #include "AddLootAction.h"
 
 #include "CellImpl.h"
+#include "DBCStores.h"
 #include "Event.h"
 #include "GameObject.h"
 #include "GridNotifiers.h"
@@ -16,6 +17,34 @@
 #include "Playerbots.h"
 #include "ServerFacade.h"
 
+// FORK-PATCH(no-auto-chest-loot): with Playerbots.AutoLootChests off, these automatic adds skip every chest.
+// Herb and ore nodes are GAMEOBJECT_TYPE_CHEST too, so a node is told apart by its lock skill.
+static bool IsChestLootBlocked(PlayerbotAI* botAI, ObjectGuid guid)
+{
+    if (sPlayerbotAIConfig.AutoLootChests || !guid.IsGameObject())
+        return false;
+
+    GameObject* go = botAI->GetGameObject(guid);
+    if (!go || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
+        return false;
+
+    LockEntry const* lockInfo = sLockStore.LookupEntry(go->GetGOInfo()->GetLockId());
+    if (!lockInfo)
+        return true;
+
+    for (uint8 i = 0; i < MAX_LOCK_CASE; ++i)
+    {
+        if (lockInfo->Type[i] != LOCK_KEY_SKILL)
+            continue;
+
+        SkillType const skill = SkillByLockType(LockType(lockInfo->Index[i]));
+        if (skill == SKILL_HERBALISM || skill == SKILL_MINING)
+            return false;
+    }
+
+    return true;
+}
+
 bool AddLootAction::Execute(Event event)
 {
     ObjectGuid guid = event.getObject();
@@ -24,7 +53,7 @@ bool AddLootAction::Execute(Event event)
 
     GameObject* go = botAI->GetGameObject(guid);
     if (!go || go->GetGoType() == GAMEOBJECT_TYPE_QUESTGIVER ||
-        sPlayerbotAIConfig.DisallowedGameObjects.contains(go->GetEntry()))
+        sPlayerbotAIConfig.DisallowedGameObjects.contains(go->GetEntry()) || IsChestLootBlocked(botAI, guid))
         return false;
 
     LootObject loot(bot, guid);
@@ -56,6 +85,9 @@ bool AddAllLootAction::isUseful() { return true; }
 bool AddAllLootAction::AddLoot(ObjectGuid guid)
 {
     if (guid.IsGameObject() && sPlayerbotAIConfig.DisallowedGameObjects.contains(guid.GetEntry()))
+        return false;
+
+    if (IsChestLootBlocked(botAI, guid))
         return false;
 
     return AI_VALUE(LootObjectStack*, "available loot")->Add(guid);
