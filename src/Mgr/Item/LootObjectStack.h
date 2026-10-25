@@ -78,6 +78,9 @@ public:
     bool operator<(LootTarget const& other) const;
     bool IsReady() const;
     void Defer();
+    // FORK-PATCH(loot-introspection): read-only, for mod-altbotinspector's ai.loot(). See LootObjectStack.
+    uint8 GetRetryCount() const { return _retryCount; }
+    std::chrono::steady_clock::time_point GetRetryUntil() const { return _retryUntil; }
 
 public:
     ObjectGuid guid;
@@ -112,6 +115,15 @@ public:
     void RetryLoot(ObjectGuid guid);
     void DeferLoot(ObjectGuid guid);
     bool CanAttemptLoot(ObjectGuid guid) const;
+
+    // FORK-PATCH(loot-introspection): read-only views for mod-altbotinspector's ai.loot(). A bot stuck on
+    // a loot target is unrecoverable by observation otherwise -- this state is private, and a restart (the
+    // only way to see it fresh) clears it. IsLootPending() is no substitute: it cancels and defers as a
+    // side effect, so a read through it would change the very state being diagnosed.
+    ObjectGuid GetPendingLoot() const { return _pendingLoot; }
+    bool IsAwaitingRelease() const { return _awaitingRelease; }
+    std::chrono::steady_clock::time_point GetPendingUntil() const { return _pendingUntil; }
+    LootTargetList const& GetTargets() const { return availableLoot; }
 
 private:
     LootObject GetNearest(float maxDistance = 0);

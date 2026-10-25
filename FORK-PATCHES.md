@@ -345,6 +345,29 @@ without a rebuild.
 
 ---
 
+## `loot-introspection`
+
+**File:** `src/Mgr/Item/LootObjectStack.h` (header only)
+
+**Upstream:** `LootObjectStack` keeps its pending loot, its release flag, its pending deadline and
+its target list private, with no getters. `LootTarget` keeps its retry count and retry deadline
+private too.
+
+**Here:** const getters, with no behaviour change: `GetPendingLoot`, `IsAwaitingRelease`,
+`GetPendingUntil` and `GetTargets` on the stack, and `GetRetryCount` and `GetRetryUntil` on
+`LootTarget`.
+
+**Why:** mod-altbotinspector's `ai.loot()` reads them, so a bot stuck on a loot target can be
+diagnosed live from Lua (`env/dist/etc/abi-scripts/90_loot_diag.lua`). Before this, the only
+way to look was a C++ log line and a rebuild, and the restart cleared the stuck state. Seen
+2026-10-24: Thoronto stood next to a copper vein while `move to loot` failed every tick.
+`IsLootPending()` cannot stand in for these getters, because it cancels and defers as a side effect.
+
+**If upstream adds equivalent accessors,** point `AltBotInspectorWorld.cpp` at them and drop
+this patch. If it renames the private members, only these one-line bodies need to follow.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline
