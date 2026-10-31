@@ -4570,8 +4570,11 @@ bool IsRealPlayer(Player* player)
 bool IsSelfBot(Player* player)
 {
     // SelfBot: "player" has PlayerbotAI attached, and it has a master who is itself (player).
+    // FORK-PATCH(selfbot-client-attached): or any PlayerbotAI on a session with a real client.
+    // mod-partybots hands a selfbot's master to the character it follows; it is still a
+    // client-driven character (teleport acks, area triggers, logout all go through the client).
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(player);
-    return botAI && botAI->GetMaster() == player;
+    return botAI && (botAI->GetMaster() == player || (player->GetSession() && !player->GetSession()->IsHeadless()));
 }
 
 // Same source as GetTeamId(true); TeamIdForRace() logs an error for non-playable races.

@@ -368,6 +368,45 @@ this patch. If it renames the private members, only these one-line bodies need t
 
 ---
 
+## `selfbot-client-attached`
+
+**File:** `src/Bot/PlayerbotAI.cpp`, the free function `IsSelfBot(Player*)`.
+
+**Upstream:**
+
+```cpp
+return botAI && botAI->GetMaster() == player;
+```
+
+**Here:**
+
+```cpp
+return botAI && (botAI->GetMaster() == player || (player->GetSession() && !player->GetSession()->IsHeadless()));
+```
+
+**Why:** mod-partybots' follow-as-bot hands a selfbot's master to the character its client is
+following, so it runs the altbot logic (formation, assist, the leader's commands) around that
+character. Its master is then no longer itself, but a real client is still attached. Nearly every
+`IsSelfBot` caller means exactly that:
+- `HandleTeleportAck` leaves the acks to the client.
+- The cross-map teleport hook (`Playerbots.cpp`) skips visibility surgery meant for headless bots.
+- `AreaTriggerAction` leaves area triggers to the client.
+- `OnPlayerBeforeLogout` logs out the character's own bots.
+- `UpdateAIGroupMaster` doesn't re-master bots whose master is a client.
+- The AFK and trade paths behave the same way.
+
+Without the patch the AI would ack teleports underneath the real client.
+
+Until partybots changes a master, nothing differs: every client-attached PlayerbotAI is a selfbot
+whose master is itself, and every headless bot still fails both tests. A follower also counts as a
+selfbot in the few spots that literally mean "acting alone" (`ItemUsageValue`'s quest-item deferral,
+AiFactory's ungrouped selfbot strategies). Both are harmless.
+
+**If upstream ever separates "client attached" from "own master",** move these callers to the new
+test and drop this patch.
+
+---
+
 ## Not catalogued here
 
 Six local commits predate this file and are not documented above (`git log --oneline
