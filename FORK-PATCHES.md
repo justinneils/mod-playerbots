@@ -35,17 +35,35 @@ if (AI_VALUE(uint8, "bag space") > 80)
 **Upstream, in full:**
 
 ```cpp
+// Skip loot that isn't useful when bags are nearly full.
 if (!IsRealPlayer(botAI->GetMaster()) && AI_VALUE(uint8, "bag space") > 80)
 {
-    uint32 maxStack = proto->GetMaxStackSize();
-    if (maxStack == 1) continue;
-    std::vector<Item*> found = parseItems(chat->FormatItem(proto));
-    bool hasFreeStack = false;
-    for (auto stack : found)
-        if (stack->GetCount() + itemcount < maxStack) { hasFreeStack = true; break; }
-    if (!hasFreeStack) continue;
+    ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", itemid);
+    bool const isUsefulItem = proto->StartQuest ||
+                              (usage != ITEM_USAGE_NONE && usage != ITEM_USAGE_VENDOR && usage != ITEM_USAGE_AH);
+    if (isUsefulItem)
+    {
+        ItemPosCountVec dest;
+        if (bot->CanStoreNewItem(INVENTORY_SLOT_BAG_0, NULL_SLOT, dest, itemid, itemcount) != EQUIP_ERR_OK)
+            continue;
+    }
+    else
+    {
+        uint32 maxStack = proto->GetMaxStackSize();
+        if (maxStack == 1) continue;
+        std::vector<Item*> found = parseItems(chat->FormatItem(proto));
+        bool hasFreeStack = false;
+        for (auto stack : found)
+            if (stack->GetCount() + itemcount < maxStack) { hasFreeStack = true; break; }
+        if (!hasFreeStack) continue;
+    }
 }
 ```
+
+Upstream #2886 (2026-10-22) added the `isUsefulItem` branch, so upstream now asks
+`CanStoreNewItem` for quest and otherwise-useful items. It keeps the stack-only heuristic for
+everything graded vendor/AH-only, which covers most gathered trade goods, and it keeps the
+`!IsRealPlayer` master check. Both reasons below still apply, so the merge kept ours whole.
 
 **Here:**
 

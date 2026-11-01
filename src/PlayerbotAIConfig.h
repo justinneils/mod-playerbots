@@ -138,6 +138,7 @@ public:
     bool BotAutologin;
     std::string RandomBotMapsAsString;
     float ProbTeleToBankers;
+    float ProbTeleToQuestGivers;
     bool EnableWeightTeleToCityBankers;
     int WeightTeleToStormwind;
     int WeightTeleToIronforge;
@@ -389,6 +390,7 @@ public:
     bool DropObsoleteQuests;
     bool AllowLearnTrainerSpells;
     bool AutoPickTalents;
+    bool AutoPickTalentsForPlayerControlledBots;
     bool AutoUpgradeEquip;
     int32 HunterWolfPet;
     int32 DefaultPetStance;
@@ -396,6 +398,8 @@ public:
     bool AutoLearnTrainerSpells;
     bool AutoDoQuests;
     bool EnableNewRpgStrategy;
+    float RpgTargetSearchDistance;
+    bool CollectDetailedQuestStats;
     std::unordered_map<NewRpgStatus, uint32> RpgStatusProbWeight;
     bool SyncLevelWithPlayers;
     bool RandomBotConcentrateInPlayerZone;
